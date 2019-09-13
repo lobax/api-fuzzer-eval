@@ -1,0 +1,10 @@
+FROM ubuntu:latest
+RUN dpkg --add-architecture i386 && apt-get update && \
+    apt-get install wine32 -y
+RUN apt-get install git -y
+RUN git clone https://github.com/stephenbradshaw/vulnserver.git 
+RUN apt-get purge git -y && apt-get autoremove -y
+WORKDIR vulnserver
+RUN apt-get install netcat -y
+HEALTHCHECK CMD echo EXIT | nc localhost 9999 || exit 1
+ENTRYPOINT ["wine", "vulnserver"]

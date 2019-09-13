@@ -1,0 +1,29 @@
+version: '3'
+
+services:
+  server:
+    build:
+      context: ../WebApps/server
+      dockerfile: dockerfile
+    networks:
+      - network
+    ports:
+      - 5000:5000 
+    stdin_open: true
+  boofuzz:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: python http.py
+    networks:
+      - network
+    stdin_open: true
+    depends_on: 
+      - server
+    ports:
+      - 26000:26000
+    stdin_open: true
+    tty: true
+networks:
+  network:
+    driver: bridge

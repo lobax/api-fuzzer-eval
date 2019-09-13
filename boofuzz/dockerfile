@@ -1,0 +1,5 @@
+FROM python:2.7-buster
+RUN pip2.7 install boofuzz
+RUN mkdir fuzz
+WORKDIR fuzz
+COPY ./*.py ./ 
