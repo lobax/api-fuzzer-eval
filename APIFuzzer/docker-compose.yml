@@ -1,0 +1,42 @@
+version: '3'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: dockerfile
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    working_dir: /APIFuzzer/test
+    environment:
+      - FLASK_APP=test_application
+    command: flask run -h 0.0.0.0
+    networks:
+      - network
+    ports:
+      - 5000:5000
+    stdin_open: true
+  apifuzz:
+    build:
+      context: .
+      dockerfile: dockerfile
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+    command: python3 fuzzer.py -s test/test_swagger_definition.json -u http://server:5000 -r /tmp/reports --log debug
+    networks:
+      - network
+    stdin_open: true
+    depends_on:
+      - server
+    ports:
+      - 26000:26000
+    stdin_open: true
+    user: ${CURRENT_UID:-1000:1000}
+    volumes:
+      - /tmp/reports:/tmp/reports
+    tty: true
+networks:
+  network:
+    driver: bridge

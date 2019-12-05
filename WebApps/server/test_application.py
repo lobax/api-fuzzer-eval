@@ -1,25 +1,37 @@
-#!/usr/bin/env python2.7
-from werkzeug.exceptions import HTTPException
-from flask import Flask, jsonify, request
+#!/usr/bin/env python3
+from functools import wraps
+import json
+from flask import Flask,  request
 from werkzeug.routing import Rule
-
-import time
-
 
 class LastRequestData(object):
 
     def __init__(self):
         self.last_request_data = dict()
 
+    def wipe_data(self):
+        self.last_request_data = dict()
+
     def set_data(self, data=None):
-        self.last_request_data = data
+        if data is not None:
+            self.last_request_data.update(data)
 
     def get_data(self):
-        return self.last_request_data
+        try:
+            return json.dumps(self.last_request_data, ensure_ascii=False, indent=2, sort_keys=True)
+        except TypeError as e:
+            return 'Error: {}, latest data: {}'.format(e, self.last_request_data)
 
 
-class InternalError(HTTPException):
-    code = 500
+def catch_custom_exception(func):
+    @wraps(func)
+    def decorated_function(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            return "Test application exception: {}".format(e), 500
+
+    return decorated_function
 
 
 def extract(d):
@@ -27,50 +39,40 @@ def extract(d):
 
 
 app = Flask(__name__)
-app.register_error_handler(500, InternalError)
 app.url_map.add(Rule('/', defaults={'path': ''}, endpoint='index'))
 app.url_map.add(Rule('/<path:path>', endpoint='index'))
 last_request_data = LastRequestData()
 
 
 @app.route('/exception/<integer_id>', methods=['GET'])
+@catch_custom_exception
 def transform(integer_id):
-    try:
-        _integer_id = int(integer_id)
-    except ValueError:
-        raise InternalError('Failed to convert %s to int', integer_id)
-    return 'ID: {}'.format(_integer_id)
+    return 'ID: {}'.format(int(integer_id))
 
 
 @app.route('/last_call', methods=['GET'])
 def last_call():
-    _return = jsonify(last_request_data.get_data())
-    last_request_data.set_data({})
+    _return = last_request_data.get_data()
+    last_request_data.wipe_data()
     return _return
 
 
-@app.endpoint('index')
-def save_request(path):
-    last_request = {
-        'status': request.args.get('status'),
-        'time': time.time(),
-        'path': request.path,
-        'script_root': request.script_root,
-        'url': request.url,
-        'base_url': request.base_url,
-        'url_root': request.url_root,
-        'method': request.method,
-        'headers': extract(request.headers),
-        'data': request.data.decode(encoding='UTF-8'),
-        'host': request.host,
-        'args': extract(request.args),
-        'form': extract(request.form),
-        'json': request.json,
-        'cookies': extract(request.cookies)
-    }
-    last_request_data.set_data(last_request)
-    return ''
+@app.after_request
+def log_the_status_code(response):
+    last_request_data.set_data({
+        'resp_body': str(response.get_data()),
+        'resp_headers': extract(response.headers),
+        'resp_status': response.status_code,
+        'req_path': request.path,
+        'req_url': request.url,
+        'req_method': request.method,
+        'req_headers': extract(request.headers),
+        'req_form': extract(request.form),
+        'req_json': request.json,
+        'req_data': request.data.decode(encoding='UTF-8')
+    })
+    return response
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True)
